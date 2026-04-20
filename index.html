@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>🍫 Золотой билет Вонки</title>
-    <!-- GSAP и Canvas Confetti -->
+    <title>🍫 Золотой билет Орион</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -68,6 +68,12 @@
             justify-content: center;
             transform-style: preserve-3d;
         }
+        .ticket.opened {
+            background: #e5d5b0;
+            background: linear-gradient(135deg, #f5ecd9 0%, #dac292 100%);
+            box-shadow: 0 4px 0 #7a5c2e, 0 6px 12px rgba(0,0,0,0.2);
+            border-color: #b5975b;
+        }
         .ticket-content {
             font-weight: bold;
             font-size: 22px;
@@ -80,243 +86,161 @@
             justify-content: center;
             backface-visibility: hidden;
         }
-        .ticket.opened {
-            background: #e5d5b0;
-            background: linear-gradient(135deg, #f5ecd9 0%, #dac292 100%);
-            box-shadow: 0 4px 0 #7a5c2e, 0 6px 12px rgba(0,0,0,0.2);
-            border-color: #b5975b;
-        }
-        .ticket-icon {
-            font-size: 36px;
-            margin-bottom: 8px;
-        }
-        .prize-text {
-            font-size: 18px;
-            color: #2e1b0e;
-        }
-        .small-note {
-            font-size: 12px;
-            color: #5d4a2e;
-            margin-top: 6px;
-        }
+        .ticket-icon { font-size: 36px; margin-bottom: 8px; }
+        .prize-text { font-size: 18px; color: #2e1b0e; }
+        .small-note { font-size: 12px; color: #5d4a2e; margin-top: 6px; }
         .golden-shine {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            pointer-events: none;
-            z-index: 999;
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none; z-index: 999;
             background: radial-gradient(circle at center, rgba(255,215,0,0.4) 0%, transparent 70%);
             animation: goldenPulse 1.5s ease-out;
         }
         @keyframes goldenPulse {
-            0% { opacity: 0; }
-            50% { opacity: 1; }
-            100% { opacity: 0; }
+            0% { opacity: 0; } 50% { opacity: 1; } 100% { opacity: 0; }
         }
-        .reset-btn {
-            background: #7b5c2e;
-            border: none;
-            color: #f5e6d3;
-            padding: 12px 20px;
-            border-radius: 40px;
-            font-weight: bold;
-            font-size: 16px;
-            margin-top: 10px;
-            border: 1px solid #b38b40;
-            cursor: pointer;
-            width: 100%;
-            transition: all 0.2s;
-        }
-        .reset-btn:hover {
-            background: #9e7a45;
-        }
-        .footer {
-            margin-top: 20px;
-            font-size: 12px;
-            opacity: 0.7;
-        }
-        .message-area {
-            min-height: 40px;
-            margin: 15px 0 5px;
-            font-style: italic;
-            color: #f0ddaa;
-        }
+        .footer { margin-top: 20px; font-size: 12px; opacity: 0.7; }
+        .message-area { min-height: 40px; margin: 15px 0 5px; font-style: italic; color: #f0ddaa; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🍫 ВОНКА</h1>
+        <h1>🍫 ОРИОН</h1>
         <div class="subtitle">Золотые билеты ждут</div>
-        
         <div id="message" class="message-area"></div>
-        
-        <div class="shelf" id="shelf">
-            <!-- Билеты будут вставлены через JS -->
-        </div>
-        
-        <button class="reset-btn" id="resetBtn">🔄 Сбросить билеты (админ)</button>
+        <div class="shelf" id="shelf"></div>
         <div class="footer">Нажми на фантик — узнай приз</div>
     </div>
 
-    <!-- Telegram Web App SDK (нужно для интеграции) -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-        // ------------------- ДЕМО-ДАННЫЕ --------------------
-        // Призы (имитация)
-        const PRIZES = [
-            { emoji: '🍫', name: 'Шоколадная медаль', description: 'Скидка 5% на следующий заказ' },
-            { emoji: '🎩', name: 'Цилиндр Вонки', description: 'Фирменный мерч (шоппер)' },
-            { emoji: '🏆', name: 'ЗОЛОТОЙ БИЛЕТ', description: 'Главный приз! Свяжитесь с нами!', isGolden: true },
-            { emoji: '🍬', name: 'Леденцовая трость', description: 'Промокод на 300₽' },
-            { emoji: '📦', name: 'Коробка конфет', description: 'Бесплатная доставка' }
-        ];
-
-        // Предопределённые результаты для трёх билетов (индексы в PRIZES)
-        const TICKET_RESULTS = [0, 2, 3];  // второй билет (индекс 1) = золотой (PRIZES[2])
-        
-        // Состояние открытых билетов (храним в sessionStorage для имитации защиты)
-        let openedState = [false, false, false];
-        
-        const shelf = document.getElementById('shelf');
-        const messageDiv = document.getElementById('message');
-        const resetBtn = document.getElementById('resetBtn');
-        
-        // Инициализация Telegram Web App
+        // ВАШ URL ОТ PYTHONANYWHERE
+        const API_BASE = 'https://iana12.pythonanywhere.com';
         const tg = window.Telegram.WebApp;
-        tg.expand(); // раскрыть на весь экран
+        tg.expand();
         tg.ready();
-        
-        // Функция рендера билетов
+
+        let tickets = [];
+        let openedState = {};
+        const messageDiv = document.getElementById('message');
+        const shelf = document.getElementById('shelf');
+
+        async function loadTickets() {
+            const userId = tg.initDataUnsafe?.user?.id;
+            if (!userId) {
+                messageDiv.textContent = 'Ошибка: не удалось идентифицировать пользователя.';
+                return;
+            }
+            try {
+                const response = await fetch(`${API_BASE}/api/my-tickets`, {
+                    headers: { 'X-Telegram-Id': userId }
+                });
+                const data = await response.json();
+                tickets = data.tickets || [];
+                renderTickets();
+                if (tickets.length === 0) {
+                    messageDiv.textContent = 'У вас пока нет билетов. Активируйте код в боте!';
+                } else {
+                    messageDiv.textContent = `У вас ${tickets.length} билетов. Выбирайте!`;
+                }
+            } catch (e) {
+                messageDiv.textContent = 'Ошибка загрузки билетов.';
+                console.error(e);
+            }
+        }
+
         function renderTickets() {
             shelf.innerHTML = '';
-            for (let i = 0; i < 3; i++) {
+            tickets.forEach((ticket, index) => {
                 const wrapper = document.createElement('div');
                 wrapper.className = 'ticket-wrapper';
-                wrapper.dataset.index = i;
+                wrapper.dataset.index = index;
+                wrapper.dataset.ticketId = ticket.id;
                 
-                const ticket = document.createElement('div');
-                ticket.className = 'ticket' + (openedState[i] ? ' opened' : '');
+                const ticketDiv = document.createElement('div');
+                ticketDiv.className = 'ticket' + (openedState[ticket.id] ? ' opened' : '');
                 
                 const content = document.createElement('div');
                 content.className = 'ticket-content';
                 
-                if (openedState[i]) {
-                    const prize = PRIZES[TICKET_RESULTS[i]];
-                    content.innerHTML = `
-                        <div class="ticket-icon">${prize.emoji}</div>
-                        <div class="prize-text">${prize.name}</div>
-                        <div class="small-note">${prize.description}</div>
-                    `;
+                if (openedState[ticket.id]) {
+                    const p = openedState[ticket.id];
+                    content.innerHTML = `<div class="ticket-icon">${p.emoji}</div>
+                                        <div class="prize-text">${p.name}</div>
+                                        <div class="small-note">${p.description}</div>`;
                 } else {
-                    content.innerHTML = `
-                        <div class="ticket-icon">🍫❓</div>
-                        <div class="prize-text">Золотой фантик</div>
-                        <div class="small-note">Нажми, чтобы развернуть</div>
-                    `;
+                    content.innerHTML = `<div class="ticket-icon">🍫❓</div>
+                                        <div class="prize-text">Золотой фантик</div>
+                                        <div class="small-note">Нажми, чтобы развернуть</div>`;
                 }
                 
-                ticket.appendChild(content);
-                wrapper.appendChild(ticket);
-                
-                wrapper.addEventListener('click', (e) => handleTicketClick(e, i));
+                ticketDiv.appendChild(content);
+                wrapper.appendChild(ticketDiv);
+                wrapper.addEventListener('click', (e) => openTicket(e, ticket.id, index));
                 shelf.appendChild(wrapper);
-            }
+            });
         }
-        
-        // Обработка клика по билету
-        function handleTicketClick(event, index) {
+
+        async function openTicket(event, ticketId, index) {
             const wrapper = event.currentTarget;
-            const ticket = wrapper.querySelector('.ticket');
+            const ticketDiv = wrapper.querySelector('.ticket');
             
-            // Если уже открыт - показываем сообщение (имитация защиты)
-            if (openedState[index]) {
-                messageDiv.textContent = '✨ Этот билет уже принёс удачу! Попробуй другой.';
-                // Лёгкая анимация покачивания
-                gsap.fromTo(ticket, 
-                    { x: -3 }, 
-                    { x: 3, duration: 0.1, yoyo: true, repeat: 2, ease: "power1.inOut" }
-                );
+            if (openedState[ticketId]) {
+                messageDiv.textContent = '✨ Этот билет уже принёс удачу!';
+                gsap.fromTo(ticketDiv, { x: -3 }, { x: 3, duration: 0.1, yoyo: true, repeat: 2 });
                 return;
             }
-            
-            // Имитация запроса к серверу (в демо просто берём результат)
-            const prize = PRIZES[TICKET_RESULTS[index]];
-            
-            // Анимация открытия (разворачивание фантика)
-            gsap.timeline()
-                .to(ticket, { scale: 1.05, duration: 0.15, ease: "back.out(1.7)" })
-                .to(ticket, { 
-                    rotationY: 180, 
-                    duration: 0.6, 
-                    ease: "power2.inOut",
-                    onComplete: () => {
-                        // Меняем содержимое на приз
-                        openedState[index] = true;
-                        ticket.classList.add('opened');
-                        const content = ticket.querySelector('.ticket-content');
-                        content.innerHTML = `
-                            <div class="ticket-icon">${prize.emoji}</div>
-                            <div class="prize-text">${prize.name}</div>
-                            <div class="small-note">${prize.description}</div>
-                        `;
-                        // Возвращаем rotationY к 0, но уже с новым контентом
-                        gsap.set(ticket, { rotationY: 0 });
-                        
-                        // Конфетти и звуки/эффекты
-                        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-                        confetti({ particleCount: 50, spread: 100, origin: { y: 0.5, x: 0.3 }, colors: ['#ffd700', '#d4af37'] });
-                        
-                        if (prize.isGolden) {
-                            // Золотой эффект
-                            const shine = document.createElement('div');
-                            shine.className = 'golden-shine';
-                            document.body.appendChild(shine);
-                            setTimeout(() => shine.remove(), 1500);
-                            
-                            messageDiv.textContent = '🎉 НЕВЕРОЯТНО! ВЫ НАШЛИ ЗОЛОТОЙ БИЛЕТ! 🎉';
-                            // Дополнительный салют
-                            setTimeout(() => {
-                                confetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
-                                confetti({ particleCount: 200, spread: 120, origin: { y: 0.4, x: 0.7 }, colors: ['#ffd700'] });
-                            }, 200);
-                        } else {
-                            messageDiv.textContent = `🎁 Поздравляем! Вы выиграли: ${prize.name}`;
-                        }
-                        
-                        // Сохраняем состояние в sessionStorage
-                        sessionStorage.setItem('wonkaTickets', JSON.stringify(openedState));
-                    }
+
+            const userId = tg.initDataUnsafe?.user?.id;
+            if (!userId) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/open-ticket`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Telegram-Id': userId },
+                    body: JSON.stringify({ ticket_id: ticketId })
                 });
-        }
-        
-        // Сброс (для демонстрации)
-        function resetTickets() {
-            openedState = [false, false, false];
-            sessionStorage.removeItem('wonkaTickets');
-            messageDiv.textContent = '';
-            renderTickets();
-            confetti({ particleCount: 30, spread: 60, origin: { y: 0.5 } });
-        }
-        
-        // Загрузка сохранённого состояния (если есть)
-        function loadState() {
-            const saved = sessionStorage.getItem('wonkaTickets');
-            if (saved) {
-                try {
-                    openedState = JSON.parse(saved);
-                } catch(e) {}
+                const data = await response.json();
+                if (data.error) {
+                    messageDiv.textContent = 'Ошибка: ' + data.error;
+                    return;
+                }
+
+                const prize = data.prize;
+                
+                gsap.timeline()
+                    .to(ticketDiv, { scale: 1.05, duration: 0.15, ease: "back.out(1.7)" })
+                    .to(ticketDiv, { 
+                        rotationY: 180, duration: 0.6, ease: "power2.inOut",
+                        onComplete: () => {
+                            openedState[ticketId] = prize;
+                            ticketDiv.classList.add('opened');
+                            const content = ticketDiv.querySelector('.ticket-content');
+                            content.innerHTML = `<div class="ticket-icon">${prize.emoji}</div>
+                                                <div class="prize-text">${prize.name}</div>
+                                                <div class="small-note">${prize.description}</div>`;
+                            gsap.set(ticketDiv, { rotationY: 0 });
+                            
+                            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                            if (prize.is_golden) {
+                                const shine = document.createElement('div');
+                                shine.className = 'golden-shine';
+                                document.body.appendChild(shine);
+                                setTimeout(() => shine.remove(), 1500);
+                                messageDiv.textContent = '🎉 НЕВЕРОЯТНО! ВЫ НАШЛИ ЗОЛОТОЙ БИЛЕТ! 🎉';
+                                setTimeout(() => {
+                                    confetti({ particleCount: 200, spread: 100 });
+                                }, 200);
+                            } else {
+                                messageDiv.textContent = `🎁 Поздравляем! Вы выиграли: ${prize.name}`;
+                            }
+                        }
+                    });
+            } catch (e) {
+                messageDiv.textContent = 'Ошибка соединения с сервером.';
+                console.error(e);
             }
-            renderTickets();
         }
-        
-        // Инициализация
-        loadState();
-        resetBtn.addEventListener('click', resetTickets);
-        
-        // Приветствие от Telegram
-        if (tg.initDataUnsafe.user) {
-            const userName = tg.initDataUnsafe.user.first_name || 'друг';
-            messageDiv.textContent = `Добро пожаловать, ${userName}! Разверни фантик...`;
-        }
+
+        loadTickets();
     </script>
 </body>
 </html>
